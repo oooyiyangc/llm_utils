@@ -11,7 +11,12 @@ OPENAI_MODEL_ALIAS = {
     "gpt-4o": "gpt-4o",
     "gpt-4o-mini": "gpt-4o-mini"
 }
-MAX_TOKENS = 16384
+MAX_TOKENS = 100000
+
+def _validate_temperature(model: str, temperature: float):
+    if any([model_name in model for model_name in ["o3", "o4"]]):
+        if temperature != 1:
+            raise ValueError(f"Temperature must be 1 for model {model}")
 
 def prepare_batch_request(
         client: OpenAI, 
@@ -21,9 +26,10 @@ def prepare_batch_request(
         ids: Optional[List[Union[int, str]]], 
         model: str = "gpt-4o-mini", 
         response_schema: Optional[dict] = None,
-        max_tokens: int = 1024, 
+        max_tokens: int = None, 
         temperature: float = 0, 
-        top_p: float = 1
+        top_p: float = 1, 
+        batch_input_save_folder: Optional[str] = None
 ) -> str:
     """
     Create batch request for OpenAI API
@@ -37,7 +43,9 @@ def prepare_batch_request(
         model (str): Model to use
         max_tokens (int): Maximum number of tokens
         temperature (float): Temperature for sampling
-        
+        top_p (float): Top-p sampling parameter
+        batch_input_save_folder (Optional[str]): Folder to save batch inputs
+
     Returns:
         List[str]: List of responses from OpenAI API
     """
@@ -55,6 +63,7 @@ def prepare_batch_request(
     if ids is not None and len(user_inputs) != len(ids):
         raise ValueError(f"Length of user_inputs and ids should be the same, but got {len(user_inputs)} and {len(ids)}")
 
+    _validate_temperature(model, temperature)
 
     batch_request = []
     default_id = 0
@@ -81,7 +90,7 @@ def prepare_batch_request(
                             }
                         ],
                         "temperature": temperature,
-                        "max_completion_tokens": min(max_tokens, MAX_TOKENS),
+                        "max_completion_tokens": min(max_tokens, MAX_TOKENS) if max_tokens is not None else MAX_TOKENS,
                         "top_p": 1, 
                         "frequency_penalty": 0,
                         "presence_penalty": 0,
@@ -124,13 +133,14 @@ def prepare_batch_request(
         default_id += 1
 
     # save batch request to JSONL file
-    with open(f"{job_name}.jsonl", "w") as f:
+    save_path = os.path.join(batch_input_save_folder, f"{job_name}.jsonl") if batch_input_save_folder else f"{job_name}.jsonl"
+    with open(save_path, "w") as f:
         for item in batch_request:
             f.write(json.dumps(item) + "\n")
     
     # upload batch request to OpenAI API
     batch_input_file = client.files.create(
-        file=open(f"{job_name}.jsonl", "rb"),
+        file=open(save_path, "rb"),
         purpose="batch"
     )
 
