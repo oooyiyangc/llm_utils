@@ -57,15 +57,6 @@ python batch_request.py
 - Example schema: protest reasons, violence, authority response, stance, etc.
 - Requires OpenAI API key and input data in the expected format.
 
-### 3. Batch Extraction from OCR Book Pages
-Run `extract_item.py` to extract structured scientific/technical innovations from OCR'd book pages:
-```bash
-python extract_item.py
-```
-- Loads OCR text files from `data/Tech_History_Book_txt/`.
-- Uses a system prompt from `prompt.txt` and API key from `secrets.yaml`.
-- Outputs structured JSON with extracted records.
-
 ## Modules
 - `llm_api/query_openai.py`: Utilities for single OpenAI requests.
 - `llm_api/batch_request_openai.py`: Batch request creation, status checking, and result retrieval for OpenAI.
@@ -74,8 +65,8 @@ python extract_item.py
 
 ## Requirements
 - Python 3.8+
-- openai==1.61.1
-- anthropic==0.34.2
+- openai>=1.0.0
+- anthropic
 - tqdm
 - pandas
 - pyyaml
