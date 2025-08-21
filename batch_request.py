@@ -45,11 +45,9 @@ def create_mini_batches(inputs: List[str], system_prompts: Union[str, List[str]]
     if isinstance(system_prompts, str):
         system_prompts = [system_prompts] * len(inputs)
         print("Provided single system prompt. Using it for all inputs.")
-    else:
-        if len(system_prompts) != len(inputs):
-            raise ValueError(f"Expected prompts to match inputs in length, but got {len(system_prompts)} prompts and {len(inputs)} inputs.")
-
+    
     mini_batch = inputs[starting_batch_idx*batch_size:(starting_batch_idx+1)*batch_size]
+    system_prompts_mini_batch = system_prompts[starting_batch_idx*batch_size:(starting_batch_idx+1)*batch_size]
 
     # ---- CUSTOMIZE THIS: preprocessing inputs -------------------------
 
@@ -58,21 +56,37 @@ def create_mini_batches(inputs: List[str], system_prompts: Union[str, List[str]]
     texts = [art["data"]["text"] for art in mini_batch]
 
     articles = []
-    system_prompts = []
     for i in range(len(mini_batch)):
         curr_art = " ".join([arg for arg in [headlines[i], bylines[i], texts[i]] if isinstance(arg, str) and len(arg) > 0])
         articles.append(curr_art)
-        system_prompts.append(system_prompts[i])
 
     # ids is a list of article ids
     ids = [art["id"] for art in mini_batch]
 
     # -------------------------------------------------------------------
 
-    return articles, ids, system_prompts
+    # validate
+    if len(articles) != len(ids) or len(articles) != len(system_prompts_mini_batch):
+        raise ValueError(f"Expect the length of articles, ids, and system prompts to be the same, but got {len(articles)}, {len(ids)}, and {len(system_prompts_mini_batch)}.")
 
 
-def create_jobs(client: OpenAI, inputs: List[str], system_prompts: List[str], task_name: str, task_description: str, working_dir: str, batch_size: int = 1000, response_schema: Optional[dict] = None):
+    return articles, ids, system_prompts_mini_batch
+
+
+def create_jobs(
+        client: OpenAI, 
+        inputs: List[str], 
+        system_prompts: List[str], 
+        task_name: str, 
+        task_description: str, 
+        working_dir: str, 
+        batch_size: int = 1000, 
+        model: str = "gpt-5-mini",
+        max_tokens: Optional[int] = None,
+        temperature: float = 1.0,
+        top_p: float = 0.0,
+        response_schema: Optional[dict] = None
+    ):
     """
     Create jobs for processing articles in batches.
 
@@ -104,12 +118,12 @@ def create_jobs(client: OpenAI, inputs: List[str], system_prompts: List[str], ta
     for batch_id in range(num_batches):
     
         # create one mini batch
-        articles, ids, system_prompts = create_mini_batches(inputs, system_prompts, batch_size, batch_id)
+        articles, ids, system_prompts_mini_batch = create_mini_batches(inputs, system_prompts, batch_size, batch_id)
 
         job_name = f"{task_name}_minibatch_{batch_id}"
 
         print("Preparing batch request...")
-        batch_file_id = batch_request_openai.prepare_batch_request(client, job_name, articles, system_prompts, ids, model="gpt-4o-mini", response_schema=response_schema, max_tokens=1024, temperature=1, top_p=0)
+        batch_file_id = batch_request_openai.prepare_batch_request(client, job_name, articles, system_prompts_mini_batch, ids, model=model, response_schema=response_schema, max_tokens=max_tokens, temperature=temperature, top_p=top_p)
 
         print("Creating batch request...")
         batch_request_id = batch_request_openai.create_batch_request(client, batch_file_id, job_name, f"{task_description}, mini-batch {batch_id}")
@@ -237,7 +251,11 @@ if __name__ == "__main__":
     working_dir = f"/mnt/data01/college_protests/editorials/gpt_pipeline/inference/"
     secrets_file = "secrets.yaml"
     system_prompt_file = "prompt.txt"
-    batch_size = 3000
+    batch_size = 1000
+    model = "gpt-5-mini"
+    max_tokens = None
+    temperature = 1.0
+    top_p = 1.0
 
     # structured output schema
     response_schema = {
@@ -314,7 +332,8 @@ if __name__ == "__main__":
     
     # run pipeline
     if step == "create_jobs":
-        create_jobs(client, inputs, system_prompt, task_name, task_description, working_dir, batch_size, response_schema=response_schema)
+        create_jobs(client, inputs, system_prompt, task_name, task_description, working_dir, batch_size, 
+                    model=model, max_tokens=max_tokens, temperature=temperature, top_p=top_p, response_schema=response_schema)
     
     elif step == "retrieve_results":
         retrieve_results(working_dir, task_name,num_batches)

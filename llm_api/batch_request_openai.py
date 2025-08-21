@@ -11,7 +11,6 @@ OPENAI_MODEL_ALIAS = {
     "gpt-4o": "gpt-4o",
     "gpt-4o-mini": "gpt-4o-mini"
 }
-MAX_TOKENS = 100000
 
 def _validate_temperature(model: str, temperature: float):
     if any([model_name in model for model_name in ["o3", "o4"]]):
@@ -90,8 +89,8 @@ def prepare_batch_request(
                             }
                         ],
                         "temperature": temperature,
-                        "max_completion_tokens": min(max_tokens, MAX_TOKENS) if max_tokens is not None else MAX_TOKENS,
-                        "top_p": 1, 
+                        "max_completion_tokens": max_tokens, 
+                        "top_p": top_p, 
                         "frequency_penalty": 0,
                         "presence_penalty": 0,
                         "seed": 42
@@ -117,7 +116,7 @@ def prepare_batch_request(
                             }
                         ],
                         "temperature": temperature,
-                        "max_completion_tokens": min(max_tokens, MAX_TOKENS),
+                        "max_completion_tokens": max_tokens, 
                         "top_p": top_p,
                         "frequency_penalty": 0,
                         "presence_penalty": 0,
